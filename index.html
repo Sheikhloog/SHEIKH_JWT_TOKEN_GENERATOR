@@ -3,134 +3,149 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Sheikh Zada — JWT Token Generator</title>
+  <title>Sheikh Zada — JWT Generator</title>
   <style>
-    body{margin:0;font-family:sans-serif;background:#0f1724;color:#e6eef8;display:flex;justify-content:center;padding:20px}
-    .app{max-width:960px;width:100%;background:#111827;padding:20px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.6)}
-    header{display:flex;align-items:center;gap:14px;margin-bottom:20px}
-    .logo{width:60px;height:60px;border-radius:12px;background:linear-gradient(135deg,#6ee7b7,#60a5fa);display:flex;align-items:center;justify-content:center;font-weight:700;color:#032;font-size:18px}
-    h1{margin:0;font-size:22px}
-    textarea{width:100%;padding:10px;border-radius:8px;background:#1f2937;color:#e6eef8;border:1px solid #374151;margin-top:10px;min-height:120px}
-    .btn{background:linear-gradient(90deg,#6ee7b7,#60a5fa);border:none;padding:10px 16px;border-radius:8px;font-weight:600;cursor:pointer;color:#042}
-    .btn.small{padding:6px 12px;font-size:13px}
-    .stats{margin:12px 0;font-size:14px}
-    table{width:100%;border-collapse:collapse;margin-top:10px}
-    th,td{padding:8px;text-align:left;border-bottom:1px dashed #374151;font-size:13px}
-    .success{color:#9ae6b4}
-    .error{color:#f87171}
-    footer{text-align:center;margin-top:14px;font-size:13px;color:#94a3b8}
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#94a3b8;--accent:#6ee7b7;--accent2:#60a5fa}
+    body{margin:0;font-family:Inter,ui-sans-serif;background:#071027;color:#e6eef8;display:flex;justify-content:center;padding:20px}
+    .app{max-width:1000px;width:100%;background:#0b1220;border-radius:12px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,0.5)}
+    header{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+    .logo{width:62px;height:62px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#032}
+    h1{font-size:20px;margin:0}
+    .card{background:rgba(255,255,255,0.02);padding:14px;border-radius:10px;margin-top:12px}
+    input[type=text], textarea{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:13px}
+    textarea{min-height:100px;resize:vertical}
+    .btn{padding:8px 12px;border:none;border-radius:8px;cursor:pointer;background:linear-gradient(90deg,var(--accent),var(--accent2));color:#042;font-weight:600;margin:4px 0}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.1);color:var(--accent)}
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+    th,td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.05);word-break:break-all;text-align:left}
+    .status-success{color:#9ae6b4}
+    .status-error{color:#f87171}
+    footer{text-align:center;margin-top:14px;color:var(--muted);font-size:12px}
+    .summary{margin:10px 0;font-size:14px}
   </style>
 </head>
 <body>
   <div class="app">
     <header>
       <div class="logo">SZ</div>
-      <h1>Sheikh Zada — JWT Token Generator</h1>
+      <div>
+        <h1>Sheikh Zada — JWT Generator</h1>
+      </div>
     </header>
 
-    <section>
-      <textarea id="input" placeholder='Paste IDs (uid,password) line by line'></textarea>
-      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+    <div class="card">
+      <h3>Input</h3>
+      <input id="fileInput" type="file" accept="application/json,text/plain" class="btn ghost">
+      <textarea id="pasteArea" placeholder='Paste JSON or uid,password lines here'></textarea>
+      <div style="margin-top:10px">
         <button id="startBtn" class="btn">Generate</button>
-        <button id="clearBtn" class="btn small">Clear</button>
-        <button id="downloadBtn" class="btn small">Download Live</button>
       </div>
-    </section>
+      <div class="summary">
+        Total: <span id="total">0</span> | 
+        ✅ Live: <span id="liveCount">0</span> | 
+        ❌ Dead: <span id="deadCount">0</span>
+      </div>
+    </div>
 
-    <div class="stats" id="stats">Total: 0 | Live: 0 | Dead: 0</div>
+    <div class="card">
+      <h3>✅ Live UIDs</h3>
+      <div id="liveWrap"><div>No Live UID yet</div></div>
+      <button id="downloadLive" class="btn ghost" style="display:none">Download Live Tokens</button>
+    </div>
 
-    <h3>Live UIDs</h3>
-    <table id="liveTable">
-      <thead><tr><th>UID</th><th>Status</th><th>Token</th></tr></thead>
-      <tbody></tbody>
-    </table>
-
-    <h3>Dead UIDs</h3>
-    <table id="deadTable">
-      <thead><tr><th>UID</th><th>Status</th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <div class="card">
+      <h3>❌ Dead UIDs</h3>
+      <div id="deadWrap"><div>No Dead UID yet</div></div>
+    </div>
 
     <footer>Sheikh Zada</footer>
   </div>
 
 <script>
-const startBtn = document.getElementById("startBtn");
-const clearBtn = document.getElementById("clearBtn");
-const downloadBtn = document.getElementById("downloadBtn");
-const input = document.getElementById("input");
-const liveTable = document.querySelector("#liveTable tbody");
-const deadTable = document.querySelector("#deadTable tbody");
-const statsEl = document.getElementById("stats");
-
-let liveResults = [];
-let deadResults = [];
-
-async function fetchWithRetry(uid, password, retries=3) {
-  for (let i=0; i<retries; i++) {
+async function parseInput() {
+  const txt = document.getElementById("pasteArea").value.trim();
+  let parsed = [];
+  if (txt) {
     try {
-      let res = await fetch("https://jnl-gen-jwt.vercel.app/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid, password })
+      if (txt.startsWith("[")) parsed = JSON.parse(txt);
+      else if (txt.startsWith("{")) parsed = [JSON.parse(txt)];
+      else parsed = txt.split(/\n+/).map(line => {
+        const [uid, password] = line.split(/,|\s+/);
+        return { uid, password };
       });
-      if (!res.ok) throw new Error("Bad response");
-      let data = await res.json();
-      if (data.token) return { success:true, token:data.token };
-    } catch(e) {
-      if (i === retries-1) return { success:false };
-    }
+    } catch { alert("Invalid pasted data"); }
   }
-  return { success:false };
+  return parsed;
 }
 
-async function processBatch(batch) {
-  return Promise.all(batch.map(({uid,password}) => fetchWithRetry(uid,password)));
-}
+document.getElementById("fileInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  document.getElementById("pasteArea").value = text;
+});
 
-startBtn.addEventListener("click", async () => {
-  liveResults = []; deadResults = [];
-  liveTable.innerHTML = ""; deadTable.innerHTML = "";
-  let lines = input.value.trim().split("\n").filter(l=>l.includes(","));
-  let creds = lines.map(l => {
-    let [uid,password] = l.split(",");
-    return { uid:uid.trim(), password:password.trim() };
+document.getElementById("startBtn").addEventListener("click", async () => {
+  const data = await parseInput();
+  if (!data.length) return alert("No input data");
+
+  document.getElementById("total").textContent = data.length;
+  document.getElementById("liveCount").textContent = "0";
+  document.getElementById("deadCount").textContent = "0";
+
+  const base = "https://jnl-gen-jwt.vercel.app/token";
+  const proxy = "https://api.allorigins.win/raw?url=";
+
+  const liveRows = [];
+  const deadRows = [];
+
+  const promises = data.map(async (it) => {
+    try {
+      const url = `${base}?uid=${encodeURIComponent(it.uid)}&password=${encodeURIComponent(it.password)}`;
+      const res = await fetch(proxy + encodeURIComponent(url));
+      let json;
+      try { json = await res.json(); }
+      catch { json = { token: await res.text() }; }
+
+      const token = json.token || json.jwt || json.access_token;
+      if (token) {
+        liveRows.push(`<tr><td>${it.uid}</td><td class="status-success">Success</td><td>Live</td><td>${token}</td></tr>`);
+      } else {
+        deadRows.push(`<tr><td>${it.uid}</td><td class="status-error">Error</td><td>Dead</td><td>No token</td></tr>`);
+      }
+    } catch (e) {
+      deadRows.push(`<tr><td>${it.uid}</td><td class="status-error">Error</td><td>Dead</td><td>${e.message}</td></tr>`);
+    }
+
+    document.getElementById("liveCount").textContent = liveRows.length;
+    document.getElementById("deadCount").textContent = deadRows.length;
+
+    document.getElementById("liveWrap").innerHTML =
+      liveRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Token</th></tr></thead>
+        <tbody>${liveRows.join("")}</tbody></table>` : "<div>No Live UID yet</div>";
+
+    document.getElementById("deadWrap").innerHTML =
+      deadRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Error</th></tr></thead>
+        <tbody>${deadRows.join("")}</tbody></table>` : "<div>No Dead UID yet</div>";
   });
 
-  for (let i=0; i<creds.length; i+=5) {
-    let batch = creds.slice(i,i+5);
-    let results = await processBatch(batch);
-    results.forEach((res,idx)=>{
-      let {uid,password} = batch[idx];
-      if (res.success) {
-        liveResults.push({uid,token:res.token});
-        let row = `<tr><td>${uid}</td><td class="success">Success</td><td class="token">${res.token}</td></tr>`;
-        liveTable.insertAdjacentHTML("beforeend", row);
-      } else {
-        deadResults.push({uid});
-        let row = `<tr><td>${uid}</td><td class="error">Error</td></tr>`;
-        deadTable.insertAdjacentHTML("beforeend", row);
-      }
-    });
-    statsEl.textContent = `Total: ${creds.length} | Live: ${liveResults.length} | Dead: ${deadResults.length}`;
+  await Promise.allSettled(promises);
+
+  if (liveRows.length) {
+    const btn = document.getElementById("downloadLive");
+    btn.style.display = "inline-block";
+    btn.onclick = () => {
+      const text = liveRows.map(r => {
+        const m = r.match(/<tr><td>(.*?)<\/td>.*?<td>Live<\/td><td>(.*?)<\/td>/);
+        return m ? `${m[1]},${m[2]}` : "";
+      }).join("\n");
+      const blob = new Blob([text], { type:"text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "live_tokens.txt";
+      a.click();
+    };
   }
-});
-
-clearBtn.addEventListener("click", ()=>{
-  input.value="";
-  liveTable.innerHTML="";
-  deadTable.innerHTML="";
-  liveResults=[]; deadResults=[];
-  statsEl.textContent="Total: 0 | Live: 0 | Dead: 0";
-});
-
-downloadBtn.addEventListener("click", ()=>{
-  if(liveResults.length===0) return alert("No live tokens to download!");
-  let blob = new Blob([JSON.stringify(liveResults,null,2)], {type:"application/json"});
-  let url = URL.createObjectURL(blob);
-  let a = document.createElement("a");
-  a.href = url; a.download="live_tokens.json";
-  a.click();
 });
 </script>
 </body>
