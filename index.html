@@ -12,7 +12,7 @@
     .logo{width:62px;height:62px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#032}
     h1{font-size:20px;margin:0}
     .card{background:rgba(255,255,255,0.02);padding:14px;border-radius:10px;margin-top:12px}
-    input[type=text], textarea{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:13px}
+    input[type=text], input[type=number], textarea{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:13px;margin-top:5px;}
     textarea{min-height:100px;resize:vertical}
     .btn{padding:8px 12px;border:none;border-radius:8px;cursor:pointer;background:linear-gradient(90deg,var(--accent),var(--accent2));color:#042;font-weight:600;margin:4px 0}
     .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.1);color:var(--accent)}
@@ -22,6 +22,8 @@
     .status-error{color:#f87171}
     footer{text-align:center;margin-top:14px;color:var(--muted);font-size:12px}
     .summary{margin:10px 0;font-size:14px}
+    .settings{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;}
+    .settings label{font-size:12px;color:var(--muted);}
   </style>
 </head>
 <body>
@@ -37,8 +39,14 @@
       <h3>Input</h3>
       <input id="fileInput" type="file" accept="application/json,text/plain" class="btn ghost">
       <textarea id="pasteArea" placeholder='Paste JSON or uid,password lines here'></textarea>
+      <div class="settings">
+        <label>Parallel Limit: <input id="parallelLimit" type="number" value="3" min="1" style="width:60px"></label>
+        <label>Min Delay(ms): <input id="minDelay" type="number" value="300" min="0" style="width:60px"></label>
+        <label>Max Delay(ms): <input id="maxDelay" type="number" value="700" min="0" style="width:60px"></label>
+      </div>
       <div style="margin-top:10px">
         <button id="startBtn" class="btn">Generate</button>
+        <button id="retryDeadBtn" class="btn ghost" style="display:none">Retry Dead UID</button>
       </div>
       <div class="summary">
         Total: <span id="total">0</span> | 
@@ -50,7 +58,7 @@
     <div class="card">
       <h3>✅ Live UIDs</h3>
       <div id="liveWrap"><div>No Live UID yet</div></div>
-      <button id="downloadLive" class="btn ghost" style="display:none">Download Live Tokens</button>
+      <button id="downloadLive" class="btn ghost" style="display:none">Download Live CSV</button>
     </div>
 
     <div class="card">
@@ -85,9 +93,8 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
   document.getElementById("pasteArea").value = text;
 });
 
-// ✅ Retry function with exponential backoff
-async function fetchWithRetry(url, attempts = 3) {
-  let delay = 300; // start delay 300ms
+async function fetchWithRetry(url, attempts = 5) {
+  let delay = 300;
   for (let i = 0; i < attempts; i++) {
     try {
       const res = await fetch(url);
@@ -97,92 +104,103 @@ async function fetchWithRetry(url, attempts = 3) {
     } catch (e) {
       if (i === attempts - 1) throw e;
       await new Promise(r => setTimeout(r, delay));
-      delay *= 2; // exponential backoff
+      delay *= 2;
     }
   }
 }
 
-// ✅ Parallel limit function
 async function asyncPool(limit, array, iteratorFn) {
   const ret = [];
   const executing = [];
   for (const item of array) {
     const p = Promise.resolve().then(() => iteratorFn(item));
     ret.push(p);
-
     if (limit <= array.length) {
       const e = p.then(() => executing.splice(executing.indexOf(e), 1));
       executing.push(e);
-      if (executing.length >= limit) {
-        await Promise.race(executing);
-      }
+      if (executing.length >= limit) await Promise.race(executing);
     }
   }
   return Promise.allSettled(ret);
 }
 
-document.getElementById("startBtn").addEventListener("click", async () => {
-  const data = await parseInput();
-  if (!data.length) return alert("No input data");
+const liveRows = [];
+let deadRows = [];
 
-  document.getElementById("total").textContent = data.length;
-  document.getElementById("liveCount").textContent = "0";
-  document.getElementById("deadCount").textContent = "0";
+const base = "https://jnl-gen-jwt.vercel.app/token";
+const proxies = [
+  "https://api.allorigins.win/raw?url=",
+  "https://cors-anywhere.herokuapp.com/",
+  "https://thingproxy.freeboard.io/fetch/"
+];
 
-  const base = "https://jnl-gen-jwt.vercel.app/token";
-  const proxies = [
-    "https://api.allorigins.win/raw?url=",
-    "https://cors-anywhere.herokuapp.com/",
-    "https://thingproxy.freeboard.io/fetch/"
-  ];
-
-  const liveRows = [];
-  const deadRows = [];
-  const parallelLimit = 5; // max 5 requests at the same time
+async function processUIDs(data) {
+  const parallelLimit = parseInt(document.getElementById("parallelLimit").value) || 3;
+  const minDelay = parseInt(document.getElementById("minDelay").value) || 300;
+  const maxDelay = parseInt(document.getElementById("maxDelay").value) || 700;
 
   await asyncPool(parallelLimit, data, async (it) => {
     try {
-      await new Promise(r => setTimeout(r, Math.random() * 200 + 100)); // optimized random delay
+      const randDelay = Math.floor(Math.random() * (maxDelay - minDelay + 1) + minDelay);
+      await new Promise(r => setTimeout(r, randDelay));
       const proxy = proxies[Math.floor(Math.random() * proxies.length)];
       const url = `${base}?uid=${encodeURIComponent(it.uid)}&password=${encodeURIComponent(it.password)}`;
-      const json = await fetchWithRetry(proxy + encodeURIComponent(url), 3);
+      const json = await fetchWithRetry(proxy + encodeURIComponent(url), 5);
       const token = json.token || json.jwt || json.access_token;
       if (token) {
-        liveRows.push(`<tr><td>${it.uid}</td><td class="status-success">Success</td><td>Live</td><td>${token}</td></tr>`);
+        liveRows.push({uid: it.uid, token, status:"Live"});
+        deadRows = deadRows.filter(d => d.uid !== it.uid);
       } else {
-        deadRows.push(`<tr><td>${it.uid}</td><td class="status-error">Error</td><td>Dead</td><td>No token</td></tr>`);
+        deadRows.push({uid: it.uid, status:"Dead", error:"No token"});
       }
     } catch (e) {
-      deadRows.push(`<tr><td>${it.uid}</td><td class="status-error">Error</td><td>Dead</td><td>${e.message}</td></tr>`);
+      deadRows.push({uid: it.uid, status:"Dead", error:e.message});
     }
-
-    document.getElementById("liveCount").textContent = liveRows.length;
-    document.getElementById("deadCount").textContent = deadRows.length;
-
-    document.getElementById("liveWrap").innerHTML =
-      liveRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Token</th></tr></thead>
-        <tbody>${liveRows.join("")}</tbody></table>` : "<div>No Live UID yet</div>";
-
-    document.getElementById("deadWrap").innerHTML =
-      deadRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Error</th></tr></thead>
-        <tbody>${deadRows.join("")}</tbody></table>` : "<div>No Dead UID yet</div>";
+    updateTables();
   });
+}
 
-  if (liveRows.length) {
+function updateTables() {
+  // Live table
+  document.getElementById("liveWrap").innerHTML = liveRows.length
+    ? `<table><thead><tr><th>UID</th><th>Status</th><th>Token</th></tr></thead><tbody>${liveRows.map(r=>`<tr><td>${r.uid}</td><td class="status-success">${r.status}</td><td>${r.token}</td></tr>`).join("")}</tbody></table>`
+    : "<div>No Live UID yet</div>";
+  // Dead table
+  document.getElementById("deadWrap").innerHTML = deadRows.length
+    ? `<table><thead><tr><th>UID</th><th>Status</th><th>Error</th></tr></thead><tbody>${deadRows.map(r=>`<tr><td>${r.uid}</td><td class="status-error">${r.status}</td><td>${r.error||""}</td></tr>`).join("")}</tbody></table>`
+    : "<div>No Dead UID yet</div>";
+  document.getElementById("liveCount").textContent = liveRows.length;
+  document.getElementById("deadCount").textContent = deadRows.length;
+
+  if(liveRows.length) {
     const btn = document.getElementById("downloadLive");
     btn.style.display = "inline-block";
     btn.onclick = () => {
-      const text = liveRows.map(r => {
-        const m = r.match(/<tr><td>(.*?)<\/td>.*?<td>Live<\/td><td>(.*?)<\/td>/);
-        return m ? `${m[1]},${m[2]}` : "";
-      }).join("\n");
-      const blob = new Blob([text], { type:"text/plain" });
+      const csv = ["UID,Status,Token"].concat(liveRows.map(r=>`${r.uid},${r.status},${r.token}`)).join("\n");
+      const blob = new Blob([csv], {type:"text/csv"});
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = "live_tokens.txt";
+      a.download = "live_tokens.csv";
       a.click();
     };
   }
+  document.getElementById("retryDeadBtn").style.display = deadRows.length ? "inline-block" : "none";
+}
+
+document.getElementById("startBtn").addEventListener("click", async () => {
+  liveRows.length = 0;
+  deadRows = [];
+  const data = await parseInput();
+  if(!data.length) return alert("No input data");
+  document.getElementById("total").textContent = data.length;
+  await processUIDs(data);
+});
+
+document.getElementById("retryDeadBtn").addEventListener("click", async () => {
+  if(!deadRows.length) return;
+  const retryData = [...deadRows];
+  deadRows = [];
+  await processUIDs(retryData);
 });
 </script>
 </body>
