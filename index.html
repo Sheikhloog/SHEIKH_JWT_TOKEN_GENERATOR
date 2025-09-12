@@ -18,10 +18,10 @@
     .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.1);color:var(--accent)}
     table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
     th,td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.05);word-break:break-all;text-align:left}
-    .status-processing{color:#facc15}
     .status-success{color:#9ae6b4}
     .status-error{color:#f87171}
     footer{text-align:center;margin-top:14px;color:var(--muted);font-size:12px}
+    .summary{margin:10px 0;font-size:14px}
   </style>
 </head>
 <body>
@@ -40,7 +40,11 @@
       <div style="margin-top:10px">
         <button id="startBtn" class="btn">Generate</button>
       </div>
-      <div style="margin-top:8px">Progress: <span id="progress">0</span></div>
+      <div class="summary">
+        Total: <span id="total">0</span> | 
+        ✅ Live: <span id="liveCount">0</span> | 
+        ❌ Dead: <span id="deadCount">0</span>
+      </div>
     </div>
 
     <div class="card">
@@ -85,35 +89,17 @@ document.getElementById("startBtn").addEventListener("click", async () => {
   const data = await parseInput();
   if (!data.length) return alert("No input data");
 
+  document.getElementById("total").textContent = data.length;
+  document.getElementById("liveCount").textContent = "0";
+  document.getElementById("deadCount").textContent = "0";
+
   const base = "https://jnl-gen-jwt.vercel.app/token";
   const proxy = "https://api.allorigins.win/raw?url=";
-
-  document.getElementById("progress").textContent = "0/" + data.length;
 
   const liveRows = [];
   const deadRows = [];
 
-  let completed = 0;
-
-  const updateTables = () => {
-    document.getElementById("liveWrap").innerHTML =
-      liveRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Token</th></tr></thead>
-        <tbody>${liveRows.join("")}</tbody></table>`
-      : "<div>No Live UID yet</div>";
-
-    document.getElementById("deadWrap").innerHTML =
-      deadRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Error</th></tr></thead>
-        <tbody>${deadRows.join("")}</tbody></table>`
-      : "<div>No Dead UID yet</div>";
-
-    document.getElementById("progress").textContent = `${completed}/${data.length}`;
-  };
-
   const promises = data.map(async (it) => {
-    const uid = it.uid;
-    deadRows.push(`<tr><td>${uid}</td><td class="status-processing">Processing...</td><td>-</td><td>-</td></tr>`);
-    updateTables();
-
     try {
       const url = `${base}?uid=${encodeURIComponent(it.uid)}&password=${encodeURIComponent(it.password)}`;
       const res = await fetch(proxy + encodeURIComponent(url));
@@ -123,16 +109,24 @@ document.getElementById("startBtn").addEventListener("click", async () => {
 
       const token = json.token || json.jwt || json.access_token;
       if (token) {
-        liveRows.push(`<tr><td>${uid}</td><td class="status-success">Success</td><td>Live</td><td>${token}</td></tr>`);
+        liveRows.push(`<tr><td>${it.uid}</td><td class="status-success">Success</td><td>Live</td><td>${token}</td></tr>`);
       } else {
-        deadRows.push(`<tr><td>${uid}</td><td class="status-error">Error</td><td>Dead</td><td>No token</td></tr>`);
+        deadRows.push(`<tr><td>${it.uid}</td><td class="status-error">Error</td><td>Dead</td><td>No token</td></tr>`);
       }
     } catch (e) {
-      deadRows.push(`<tr><td>${uid}</td><td class="status-error">Error</td><td>Dead</td><td>${e.message}</td></tr>`);
+      deadRows.push(`<tr><td>${it.uid}</td><td class="status-error">Error</td><td>Dead</td><td>${e.message}</td></tr>`);
     }
 
-    completed++;
-    updateTables();
+    document.getElementById("liveCount").textContent = liveRows.length;
+    document.getElementById("deadCount").textContent = deadRows.length;
+
+    document.getElementById("liveWrap").innerHTML =
+      liveRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Token</th></tr></thead>
+        <tbody>${liveRows.join("")}</tbody></table>` : "<div>No Live UID yet</div>";
+
+    document.getElementById("deadWrap").innerHTML =
+      deadRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Error</th></tr></thead>
+        <tbody>${deadRows.join("")}</tbody></table>` : "<div>No Dead UID yet</div>";
   });
 
   await Promise.allSettled(promises);
@@ -142,7 +136,7 @@ document.getElementById("startBtn").addEventListener("click", async () => {
     btn.style.display = "inline-block";
     btn.onclick = () => {
       const text = liveRows.map(r => {
-        const m = r.match(/<td>(.*?)<\/td><td.*?>.*?<\/td><td.*?>.*?<\/td><td>(.*?)<\/td>/);
+        const m = r.match(/<tr><td>(.*?)<\/td>.*?<td>Live<\/td><td>(.*?)<\/td>/);
         return m ? `${m[1]},${m[2]}` : "";
       }).join("\n");
       const blob = new Blob([text], { type:"text/plain" });
