@@ -11,7 +11,6 @@
     header{display:flex;align-items:center;gap:14px;margin-bottom:12px}
     .logo{width:62px;height:62px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#032}
     h1{font-size:20px;margin:0}
-    p.lead{margin:0;color:var(--muted);font-size:13px}
     .card{background:rgba(255,255,255,0.02);padding:14px;border-radius:10px;margin-top:12px}
     input[type=text], textarea{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:13px}
     textarea{min-height:100px;resize:vertical}
@@ -22,6 +21,7 @@
     .status-processing{color:#facc15}
     .status-success{color:#9ae6b4}
     .status-error{color:#f87171}
+    footer{text-align:center;margin-top:14px;color:var(--muted);font-size:12px}
   </style>
 </head>
 <body>
@@ -30,7 +30,6 @@
       <div class="logo">SZ</div>
       <div>
         <h1>Sheikh Zada — JWT Generator</h1>
-        <p class="lead">Upload/paste your IDs → Tokens generate honge | Live aur Dead alag tables</p>
       </div>
     </header>
 
@@ -38,8 +37,7 @@
       <h3>Input</h3>
       <input id="fileInput" type="file" accept="application/json,text/plain" class="btn ghost">
       <textarea id="pasteArea" placeholder='Paste JSON or uid,password lines here'></textarea>
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-        <input id="apiBase" type="text" value="https://jnl-gen-jwt.vercel.app/token" style="flex:1">
+      <div style="margin-top:10px">
         <button id="startBtn" class="btn">Generate</button>
       </div>
       <div style="margin-top:8px">Progress: <span id="progress">0</span></div>
@@ -56,9 +54,7 @@
       <div id="deadWrap"><div>No Dead UID yet</div></div>
     </div>
 
-    <footer style="margin-top:14px;color:var(--muted);font-size:12px">
-      Sheikh Zada | If CORS blocked → run locally with Live Server
-    </footer>
+    <footer>Sheikh Zada</footer>
   </div>
 
 <script>
@@ -89,7 +85,7 @@ document.getElementById("startBtn").addEventListener("click", async () => {
   const data = await parseInput();
   if (!data.length) return alert("No input data");
 
-  const base = document.getElementById("apiBase").value.trim();
+  const base = "https://jnl-gen-jwt.vercel.app/token";
   const proxy = "https://api.allorigins.win/raw?url=";
 
   document.getElementById("progress").textContent = "0/" + data.length;
@@ -100,13 +96,11 @@ document.getElementById("startBtn").addEventListener("click", async () => {
   let completed = 0;
 
   const updateTables = () => {
-    // live table
     document.getElementById("liveWrap").innerHTML =
       liveRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Token</th></tr></thead>
         <tbody>${liveRows.join("")}</tbody></table>`
       : "<div>No Live UID yet</div>";
 
-    // dead table
     document.getElementById("deadWrap").innerHTML =
       deadRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Error</th></tr></thead>
         <tbody>${deadRows.join("")}</tbody></table>`
@@ -117,8 +111,7 @@ document.getElementById("startBtn").addEventListener("click", async () => {
 
   const promises = data.map(async (it) => {
     const uid = it.uid;
-    let rowHtml = `<tr><td>${uid}</td><td class="status-processing">Processing...</td><td>-</td><td>-</td></tr>`;
-    deadRows.push(rowHtml);
+    deadRows.push(`<tr><td>${uid}</td><td class="status-processing">Processing...</td><td>-</td><td>-</td></tr>`);
     updateTables();
 
     try {
