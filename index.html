@@ -94,15 +94,26 @@ document.getElementById("startBtn").addEventListener("click", async () => {
   document.getElementById("deadCount").textContent = "0";
 
   const base = "https://jnl-gen-jwt.vercel.app/token";
-  const proxy = "https://api.allorigins.win/raw?url=";
+  
+  // ✅ Multiple proxies
+  const proxies = [
+    "https://api.allorigins.win/raw?url=",
+    "https://cors-anywhere.herokuapp.com/",
+    "https://thingproxy.freeboard.io/fetch/"
+  ];
 
   const liveRows = [];
   const deadRows = [];
 
   const promises = data.map(async (it) => {
     try {
+      // ✅ Random delay 100-500ms
+      await new Promise(r => setTimeout(r, Math.random() * 400 + 100));
+      
+      const proxy = proxies[Math.floor(Math.random() * proxies.length)];
       const url = `${base}?uid=${encodeURIComponent(it.uid)}&password=${encodeURIComponent(it.password)}`;
       const res = await fetch(proxy + encodeURIComponent(url));
+      
       let json;
       try { json = await res.json(); }
       catch { json = { token: await res.text() }; }
