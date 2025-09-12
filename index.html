@@ -18,8 +18,8 @@
     }
     .app {
       width: 100%;
-      max-width: 900px;
-      background: rgba(255,255,255,0.04);
+      max-width: 950px;
+      background: rgba(255,255,255,0.05);
       border-radius: 16px;
       padding: 24px;
       box-shadow: 0 6px 24px rgba(0,0,0,0.4);
@@ -36,22 +36,18 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
-    p.lead {
-      font-size: 14px;
-      color: #94a3b8;
-      margin-top: 6px;
-    }
-    textarea, input[type=text] {
+    p.lead { font-size: 14px; color: #94a3b8; margin-top: 6px; }
+    textarea, input[type=text], input[type=file] {
       width: 100%;
       padding: 10px;
       border-radius: 8px;
       border: none;
       margin-top: 10px;
-      background: rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.07);
       color: #f1f5f9;
       font-size: 14px;
     }
-    textarea { min-height: 100px; }
+    textarea { min-height: 90px; }
     .btn {
       margin-top: 14px;
       display: inline-block;
@@ -74,28 +70,28 @@
     }
     th, td {
       padding: 8px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
       text-align: left;
     }
-    td.token {
-      font-family: monospace;
-      word-break: break-all;
-    }
+    td.token { font-family: monospace; word-break: break-all; }
     .status-ok { color: #4ade80; }
     .status-err { color: #f87171; }
+    #downloadBtn { display:none; }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
       <h1>Sheikh Zada — JWT Token Generator</h1>
-      <p class="lead">Paste your <code>id.json</code> or lines like <em>uid,password</em>. Tokens will be generated using the API.</p>
+      <p class="lead">Paste, upload file, or type <code>uid,password</code>. Get tokens with status + download option.</p>
     </header>
 
     <section>
-      <textarea id="pasteArea" placeholder='Example: {"uid":"3993678816","password":"ABC"} or multiple lines: uid,password'></textarea>
+      <textarea id="pasteArea" placeholder='Paste here: {"uid":"3993678816","password":"ABC"} or lines like uid,password'></textarea>
+      <input type="file" id="fileInput" accept=".txt,.json" />
       <input id="apiBase" type="text" value="https://jnl-gen-jwt.vercel.app/token" style="display:none">
       <button id="startBtn" class="btn">Generate Tokens</button>
+      <button id="downloadBtn" class="btn">Download All Tokens</button>
       <div class="progress">Progress: <span id="progress">0</span></div>
       <div id="tableWrap" style="margin-top:12px;max-height:400px;overflow:auto"></div>
     </section>
@@ -104,26 +100,33 @@
 <script>
 async function parseInput() {
   const txt = document.getElementById("pasteArea").value.trim();
-  try {
-    if (!txt) return [];
-    if (txt.startsWith("[")) return JSON.parse(txt);
-    if (txt.startsWith("{")) return [JSON.parse(txt)];
-    return txt.split(/\n+/).map(line => {
-      const [uid, password] = line.split(/,|\s+/);
-      return { uid, password };
-    });
-  } catch (e) {
-    alert("Invalid input format");
-    return [];
+  let parsed = [];
+  if (txt) {
+    try {
+      if (txt.startsWith("[")) parsed = JSON.parse(txt);
+      else if (txt.startsWith("{")) parsed = [JSON.parse(txt)];
+      else parsed = txt.split(/\n+/).map(line => {
+        const [uid, password] = line.split(/,|\s+/);
+        return { uid, password };
+      });
+    } catch (e) { alert("Invalid pasted data"); }
   }
+  return parsed;
 }
+
+document.getElementById("fileInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  document.getElementById("pasteArea").value = text;
+});
 
 document.getElementById("startBtn").addEventListener("click", async () => {
   const data = await parseInput();
   if (!data.length) return alert("No input data");
 
   const base = document.getElementById("apiBase").value.trim();
-  const proxy = "https://api.allorigins.win/raw?url="; // fixed working proxy
+  const proxy = "https://api.allorigins.win/raw?url="; // working proxy
 
   const results = [];
   let done = 0;
@@ -133,7 +136,6 @@ document.getElementById("startBtn").addEventListener("click", async () => {
     try {
       const url = `${base}?uid=${encodeURIComponent(it.uid)}&password=${encodeURIComponent(it.password)}`;
       const fetchUrl = proxy + encodeURIComponent(url);
-
       const res = await fetch(fetchUrl);
       const json = await res.json();
       results.push(json);
@@ -153,6 +155,18 @@ document.getElementById("startBtn").addEventListener("click", async () => {
 
   document.getElementById("tableWrap").innerHTML =
     `<table><thead><tr><th>UID</th><th>Token/Error</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+  // Enable download button
+  const btn = document.getElementById("downloadBtn");
+  btn.style.display = "inline-block";
+  btn.onclick = () => {
+    const text = results.map(r => `${r.uid || ""},${r.token || r.error || ""},${r.status || "err"}`).join("\n");
+    const blob = new Blob([text], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "tokens.txt";
+    a.click();
+  };
 });
 </script>
 </body>
