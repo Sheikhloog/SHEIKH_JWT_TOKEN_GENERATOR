@@ -29,13 +29,11 @@
     </header>
 
     <section>
-      <input id="file" type="file" accept=".json,.txt" />
-      <textarea id="input" placeholder='Paste IDs (uid,password) line by line OR upload file'></textarea>
+      <textarea id="input" placeholder='Paste IDs (uid,password) line by line'></textarea>
       <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
         <button id="startBtn" class="btn">Generate</button>
         <button id="clearBtn" class="btn small">Clear</button>
-        <button id="downloadJson" class="btn small">Download JSON</button>
-        <button id="downloadCsv" class="btn small">Download CSV</button>
+        <button id="downloadBtn" class="btn small">Download Live</button>
       </div>
     </section>
 
@@ -59,26 +57,14 @@
 <script>
 const startBtn = document.getElementById("startBtn");
 const clearBtn = document.getElementById("clearBtn");
-const downloadJsonBtn = document.getElementById("downloadJson");
-const downloadCsvBtn = document.getElementById("downloadCsv");
+const downloadBtn = document.getElementById("downloadBtn");
 const input = document.getElementById("input");
-const fileInput = document.getElementById("file");
 const liveTable = document.querySelector("#liveTable tbody");
 const deadTable = document.querySelector("#deadTable tbody");
 const statsEl = document.getElementById("stats");
 
 let liveResults = [];
 let deadResults = [];
-
-fileInput.addEventListener("change", e=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev=>{
-    input.value = ev.target.result;
-  };
-  reader.readAsText(file);
-});
 
 async function fetchWithRetry(uid, password, retries=3) {
   for (let i=0; i<retries; i++) {
@@ -105,22 +91,11 @@ async function processBatch(batch) {
 startBtn.addEventListener("click", async () => {
   liveResults = []; deadResults = [];
   liveTable.innerHTML = ""; deadTable.innerHTML = "";
-  let text = input.value.trim();
-  if(!text) return alert("Paste or upload IDs first!");
-
-  let creds = [];
-  try {
-    if(text.startsWith("{") || text.startsWith("[")) {
-      let parsed = JSON.parse(text);
-      if(Array.isArray(parsed)) creds = parsed;
-      else creds = [parsed];
-    } else {
-      creds = text.split("\n").filter(l=>l.includes(",")).map(l=>{
-        let [uid,password] = l.split(",");
-        return { uid:uid.trim(), password:password.trim() };
-      });
-    }
-  } catch(e){ return alert("Invalid format"); }
+  let lines = input.value.trim().split("\n").filter(l=>l.includes(","));
+  let creds = lines.map(l => {
+    let [uid,password] = l.split(",");
+    return { uid:uid.trim(), password:password.trim() };
+  });
 
   for (let i=0; i<creds.length; i+=5) {
     let batch = creds.slice(i,i+5);
@@ -129,7 +104,7 @@ startBtn.addEventListener("click", async () => {
       let {uid,password} = batch[idx];
       if (res.success) {
         liveResults.push({uid,token:res.token});
-        let row = `<tr><td>${uid}</td><td class="success">Success</td><td>${res.token}</td></tr>`;
+        let row = `<tr><td>${uid}</td><td class="success">Success</td><td class="token">${res.token}</td></tr>`;
         liveTable.insertAdjacentHTML("beforeend", row);
       } else {
         deadResults.push({uid});
@@ -142,28 +117,19 @@ startBtn.addEventListener("click", async () => {
 });
 
 clearBtn.addEventListener("click", ()=>{
-  input.value=""; fileInput.value="";
-  liveTable.innerHTML=""; deadTable.innerHTML="";
+  input.value="";
+  liveTable.innerHTML="";
+  deadTable.innerHTML="";
   liveResults=[]; deadResults=[];
   statsEl.textContent="Total: 0 | Live: 0 | Dead: 0";
 });
 
-downloadJsonBtn.addEventListener("click", ()=>{
+downloadBtn.addEventListener("click", ()=>{
   if(liveResults.length===0) return alert("No live tokens to download!");
   let blob = new Blob([JSON.stringify(liveResults,null,2)], {type:"application/json"});
   let url = URL.createObjectURL(blob);
   let a = document.createElement("a");
   a.href = url; a.download="live_tokens.json";
-  a.click();
-});
-
-downloadCsvBtn.addEventListener("click", ()=>{
-  if(liveResults.length===0) return alert("No live tokens to download!");
-  let csv = "uid,token\n" + liveResults.map(r=>`${r.uid},${r.token}`).join("\n");
-  let blob = new Blob([csv], {type:"text/csv"});
-  let url = URL.createObjectURL(blob);
-  let a = document.createElement("a");
-  a.href = url; a.download="live_tokens.csv";
   a.click();
 });
 </script>
