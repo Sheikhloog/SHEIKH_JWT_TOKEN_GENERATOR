@@ -5,96 +5,60 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Sheikh Zada — JWT Generator</title>
   <style>
-    body {
-      margin: 0;
-      font-family: "Inter", sans-serif;
-      background: linear-gradient(135deg, #0f172a, #1e293b);
-      color: #e2e8f0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-    .app {
-      width: 100%;
-      max-width: 950px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 6px 24px rgba(0,0,0,0.4);
-    }
-    header {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-    h1 {
-      margin: 0;
-      font-size: 22px;
-      font-weight: 700;
-      background: linear-gradient(90deg, #38bdf8, #34d399);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    p.lead { font-size: 14px; color: #94a3b8; margin-top: 6px; }
-    textarea, input[type=text], input[type=file] {
-      width: 100%;
-      padding: 10px;
-      border-radius: 8px;
-      border: none;
-      margin-top: 10px;
-      background: rgba(255,255,255,0.07);
-      color: #f1f5f9;
-      font-size: 14px;
-    }
-    textarea { min-height: 90px; }
-    .btn {
-      margin-top: 14px;
-      display: inline-block;
-      padding: 10px 16px;
-      border-radius: 8px;
-      border: none;
-      background: linear-gradient(90deg,#34d399,#38bdf8);
-      color: #032;
-      font-weight: 600;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-    .btn:hover { opacity: 0.9; }
-    .progress { margin-top: 10px; font-size: 13px; color: #94a3b8; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 16px;
-      font-size: 13px;
-    }
-    th, td {
-      padding: 8px;
-      border-bottom: 1px solid rgba(255,255,255,0.07);
-      text-align: left;
-    }
-    td.token { font-family: monospace; word-break: break-all; }
-    .status-ok { color: #4ade80; }
-    .status-err { color: #f87171; }
-    #downloadBtn { display:none; }
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#94a3b8;--accent:#6ee7b7;--accent2:#60a5fa}
+    body{margin:0;font-family:Inter,ui-sans-serif;background:#071027;color:#e6eef8;display:flex;justify-content:center;padding:20px}
+    .app{max-width:1000px;width:100%;background:#0b1220;border-radius:12px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,0.5)}
+    header{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+    .logo{width:62px;height:62px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#032}
+    h1{font-size:20px;margin:0}
+    p.lead{margin:0;color:var(--muted);font-size:13px}
+    .card{background:rgba(255,255,255,0.02);padding:14px;border-radius:10px;margin-top:12px}
+    input[type=text], textarea{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:13px}
+    textarea{min-height:100px;resize:vertical}
+    .btn{padding:8px 12px;border:none;border-radius:8px;cursor:pointer;background:linear-gradient(90deg,var(--accent),var(--accent2));color:#042;font-weight:600;margin:4px 0}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.1);color:var(--accent)}
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+    th,td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.05);word-break:break-all;text-align:left}
+    .status-processing{color:#facc15}
+    .status-success{color:#9ae6b4}
+    .status-error{color:#f87171}
   </style>
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>Sheikh Zada — JWT Token Generator</h1>
-      <p class="lead">Paste, upload file, or type <code>uid,password</code>. Get tokens with status + download option.</p>
+      <div class="logo">SZ</div>
+      <div>
+        <h1>Sheikh Zada — JWT Generator</h1>
+        <p class="lead">Upload/paste your IDs → Tokens generate honge | Live aur Dead alag tables</p>
+      </div>
     </header>
 
-    <section>
-      <textarea id="pasteArea" placeholder='Paste here: {"uid":"3993678816","password":"ABC"} or lines like uid,password'></textarea>
-      <input type="file" id="fileInput" accept=".txt,.json" />
-      <input id="apiBase" type="text" value="https://jnl-gen-jwt.vercel.app/token" style="display:none">
-      <button id="startBtn" class="btn">Generate Tokens</button>
-      <button id="downloadBtn" class="btn">Download All Tokens</button>
-      <div class="progress">Progress: <span id="progress">0</span></div>
-      <div id="tableWrap" style="margin-top:12px;max-height:400px;overflow:auto"></div>
-    </section>
+    <div class="card">
+      <h3>Input</h3>
+      <input id="fileInput" type="file" accept="application/json,text/plain" class="btn ghost">
+      <textarea id="pasteArea" placeholder='Paste JSON or uid,password lines here'></textarea>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <input id="apiBase" type="text" value="https://jnl-gen-jwt.vercel.app/token" style="flex:1">
+        <button id="startBtn" class="btn">Generate</button>
+      </div>
+      <div style="margin-top:8px">Progress: <span id="progress">0</span></div>
+    </div>
+
+    <div class="card">
+      <h3>✅ Live UIDs</h3>
+      <div id="liveWrap"><div>No Live UID yet</div></div>
+      <button id="downloadLive" class="btn ghost" style="display:none">Download Live Tokens</button>
+    </div>
+
+    <div class="card">
+      <h3>❌ Dead UIDs</h3>
+      <div id="deadWrap"><div>No Dead UID yet</div></div>
+    </div>
+
+    <footer style="margin-top:14px;color:var(--muted);font-size:12px">
+      Sheikh Zada | If CORS blocked → run locally with Live Server
+    </footer>
   </div>
 
 <script>
@@ -109,7 +73,7 @@ async function parseInput() {
         const [uid, password] = line.split(/,|\s+/);
         return { uid, password };
       });
-    } catch (e) { alert("Invalid pasted data"); }
+    } catch { alert("Invalid pasted data"); }
   }
   return parsed;
 }
@@ -126,47 +90,75 @@ document.getElementById("startBtn").addEventListener("click", async () => {
   if (!data.length) return alert("No input data");
 
   const base = document.getElementById("apiBase").value.trim();
-  const proxy = "https://api.allorigins.win/raw?url="; // working proxy
+  const proxy = "https://api.allorigins.win/raw?url=";
 
-  const results = [];
-  let done = 0;
   document.getElementById("progress").textContent = "0/" + data.length;
 
-  for (let it of data) {
+  const liveRows = [];
+  const deadRows = [];
+
+  let completed = 0;
+
+  const updateTables = () => {
+    // live table
+    document.getElementById("liveWrap").innerHTML =
+      liveRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Token</th></tr></thead>
+        <tbody>${liveRows.join("")}</tbody></table>`
+      : "<div>No Live UID yet</div>";
+
+    // dead table
+    document.getElementById("deadWrap").innerHTML =
+      deadRows.length ? `<table><thead><tr><th>UID</th><th>Status</th><th>Live/Dead</th><th>Error</th></tr></thead>
+        <tbody>${deadRows.join("")}</tbody></table>`
+      : "<div>No Dead UID yet</div>";
+
+    document.getElementById("progress").textContent = `${completed}/${data.length}`;
+  };
+
+  const promises = data.map(async (it) => {
+    const uid = it.uid;
+    let rowHtml = `<tr><td>${uid}</td><td class="status-processing">Processing...</td><td>-</td><td>-</td></tr>`;
+    deadRows.push(rowHtml);
+    updateTables();
+
     try {
       const url = `${base}?uid=${encodeURIComponent(it.uid)}&password=${encodeURIComponent(it.password)}`;
-      const fetchUrl = proxy + encodeURIComponent(url);
-      const res = await fetch(fetchUrl);
-      const json = await res.json();
-      results.push(json);
+      const res = await fetch(proxy + encodeURIComponent(url));
+      let json;
+      try { json = await res.json(); }
+      catch { json = { token: await res.text() }; }
+
+      const token = json.token || json.jwt || json.access_token;
+      if (token) {
+        liveRows.push(`<tr><td>${uid}</td><td class="status-success">Success</td><td>Live</td><td>${token}</td></tr>`);
+      } else {
+        deadRows.push(`<tr><td>${uid}</td><td class="status-error">Error</td><td>Dead</td><td>No token</td></tr>`);
+      }
     } catch (e) {
-      results.push({ uid: it.uid, error: e.message });
+      deadRows.push(`<tr><td>${uid}</td><td class="status-error">Error</td><td>Dead</td><td>${e.message}</td></tr>`);
     }
-    done++;
-    document.getElementById("progress").textContent = `${done}/${data.length}`;
+
+    completed++;
+    updateTables();
+  });
+
+  await Promise.allSettled(promises);
+
+  if (liveRows.length) {
+    const btn = document.getElementById("downloadLive");
+    btn.style.display = "inline-block";
+    btn.onclick = () => {
+      const text = liveRows.map(r => {
+        const m = r.match(/<td>(.*?)<\/td><td.*?>.*?<\/td><td.*?>.*?<\/td><td>(.*?)<\/td>/);
+        return m ? `${m[1]},${m[2]}` : "";
+      }).join("\n");
+      const blob = new Blob([text], { type:"text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "live_tokens.txt";
+      a.click();
+    };
   }
-
-  const rows = results.map(r => `
-    <tr>
-      <td>${r.uid || "-"}</td>
-      <td class="token">${r.token || r.error || "-"}</td>
-      <td class="${r.status==="live"?"status-ok":"status-err"}">${r.status||"err"}</td>
-    </tr>`).join("");
-
-  document.getElementById("tableWrap").innerHTML =
-    `<table><thead><tr><th>UID</th><th>Token/Error</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
-
-  // Enable download button
-  const btn = document.getElementById("downloadBtn");
-  btn.style.display = "inline-block";
-  btn.onclick = () => {
-    const text = results.map(r => `${r.uid || ""},${r.token || r.error || ""},${r.status || "err"}`).join("\n");
-    const blob = new Blob([text], { type: "text/plain" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "tokens.txt";
-    a.click();
-  };
 });
 </script>
 </body>
