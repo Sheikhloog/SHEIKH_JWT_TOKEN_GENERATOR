@@ -121,7 +121,7 @@ const liveRows=[];
 let deadRows=[];
 const base="https://jnl-gen-jwt.vercel.app/token";
 
-// Maximum 15+ proxies for better retry success
+// Updated working proxies (15)
 const proxies=[
 "https://api.allorigins.win/raw?url=",
 "https://thingproxy.freeboard.io/fetch/",
@@ -134,13 +134,13 @@ const proxies=[
 "https://cors.isomorphic.site/",
 "https://cors-anywhere.netlify.app/",
 "https://corsproxy.github.io/?",
-"https://crossorigin.me/",
+"https://crossorigin.me",  // optional if you want to keep, else remove
 "https://api.codetabs.com/v1/proxy?quest=",
 "https://thingproxy.freeboard.io/fetch/",
 "https://api.allorigins.win/raw?url="
 ];
 
-// Default faster processing values
+// Faster processing
 const parallelLimit=12;
 const minDelay=100;
 const maxDelay=300;
@@ -150,7 +150,8 @@ await asyncPool(parallelLimit,data,async(it)=>{
 try{
 const randDelay=Math.floor(Math.random()*(maxDelay-minDelay+1)+minDelay);
 await new Promise(r=>setTimeout(r,randDelay));
-const proxy=proxies[Math.floor(Math.random()*proxies.length)];
+let proxy;
+do { proxy=proxies[Math.floor(Math.random()*proxies.length)]; } while(proxy.includes("crossorigin.me"));
 const url=`${base}?uid=${encodeURIComponent(it.uid)}&password=${encodeURIComponent(it.password)}`;
 const json=await fetchWithRetry(proxy+encodeURIComponent(url),5);
 const token=json.token||json.jwt||json.access_token;
@@ -225,5 +226,4 @@ await processUIDs(retryData);
 });
 </script>
 </body>
-  </html>
-  
+</html>
