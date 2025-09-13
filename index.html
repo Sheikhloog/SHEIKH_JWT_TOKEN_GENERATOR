@@ -120,13 +120,24 @@ return Promise.allSettled(ret);
 const liveRows=[];
 let deadRows=[];
 const base="https://jnl-gen-jwt.vercel.app/token";
+
+// Maximum 15+ proxies for better retry success
 const proxies=[
 "https://api.allorigins.win/raw?url=",
 "https://thingproxy.freeboard.io/fetch/",
 "https://cors-anywhere.herokuapp.com/",
 "https://yacdn.org/proxy/",
 "https://corsproxy.io/?",
-"https://allorigins.hexlet.app/raw?url/"
+"https://allorigins.hexlet.app/raw?url=",
+"https://cors.bridged.cc/",
+"https://cors-proxy.htmldriven.com/?url=",
+"https://cors.isomorphic.site/",
+"https://cors-anywhere.netlify.app/",
+"https://corsproxy.github.io/?",
+"https://crossorigin.me/",
+"https://api.codetabs.com/v1/proxy?quest=",
+"https://thingproxy.freeboard.io/fetch/",
+"https://api.allorigins.win/raw?url="
 ];
 
 // Default faster processing values
@@ -214,4 +225,5 @@ await processUIDs(retryData);
 });
 </script>
 </body>
-</html>
+  </html>
+  
