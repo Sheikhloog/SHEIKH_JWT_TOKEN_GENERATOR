@@ -16,6 +16,7 @@
     textarea{min-height:100px;resize:vertical}
     .btn{padding:8px 12px;border:none;border-radius:8px;cursor:pointer;background:linear-gradient(90deg,var(--accent),var(--accent2));color:#042;font-weight:600;margin:4px 0}
     .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.1);color:var(--accent)}
+    .btn:disabled{opacity:0.6;cursor:not-allowed}
     table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
     th,td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.05);word-break:break-all;text-align:left}
     .status-success{color:#9ae6b4}
@@ -37,8 +38,9 @@
       <h3>Input</h3>
       <input id="fileInput" type="file" accept="application/json,text/plain" class="btn ghost">
       <textarea id="pasteArea" placeholder='Paste JSON or uid,password lines here'></textarea>
-      <div style="margin-top:10px">
+      <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
         <button id="startBtn" class="btn">Generate</button>
+        <button id="retryBtn" class="btn ghost" style="display:none">Retry Dead</button>
       </div>
       <div class="summary">
         Total: <span id="total">0</span> | 
@@ -65,7 +67,6 @@
   </div>
 
 <script>
-/* ---------- Utilities ---------- */
 function safeParseJSON(text) {
   try { return JSON.parse(text); } catch { return null; }
 }
@@ -77,7 +78,6 @@ function fetchWithTimeout(input, ms = 6000) {
     .finally(() => clearTimeout(id));
 }
 
-/* ---------- Parse input (paste or file) ---------- */
 async function parseInput() {
   const txt = document.getElementById("pasteArea").value.trim();
   let parsed = [];
@@ -104,7 +104,6 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
   document.getElementById("pasteArea").value = text;
 });
 
-/* ---------- Stable proxy list (25+) - crossorigin.me removed ---------- */
 const PROXIES = [
   "https://api.allorigins.win/raw?url=",
   "https://thingproxy.freeboard.io/fetch/",
@@ -134,19 +133,17 @@ const PROXIES = [
   "https://justcors.com/l_request?url="
 ];
 
-/* ---------- Config ---------- */
-const CONCURRENCY = 12;      // number of parallel workers
-const UID_ATTEMPTS = 3;      // how many full attempts per UID (each attempt chooses random proxies in parallel)
-const PROXY_TIMEOUT = 5000;  // ms timeout per proxy fetch
+const CONCURRENCY = 12;
+const UID_ATTEMPTS = 3;
+const PROXY_TIMEOUT = 5000;
 
-/* ---------- State ---------- */
-let liveRows = [];  // array of {uid, token}
-let deadRows = [];  // array of {uid, error}
+let liveRows = [];
+let deadRows = [];
 
-/* ---------- UI helpers ---------- */
 function updateCounters() {
   document.getElementById("liveCount").textContent = liveRows.length;
   document.getElementById("deadCount").textContent = deadRows.length;
+  document.getElementById("retryBtn").style.display = deadRows.length ? "inline-block" : "none";
 }
 
 function renderTables() {
@@ -172,30 +169,21 @@ function renderTables() {
   }
 }
 
-/* ---------- Core: try proxies in parallel and return first valid token ---------- */
 async function tryProxiesForUidOnce(uid, password) {
-  // build an array of fetch promises (each proxy tries the target URL)
   const urlPath = `https://jnl-gen-jwt.vercel.app/token?uid=${encodeURIComponent(uid)}&password=${encodeURIComponent(password || "")}`;
-
   const promises = PROXIES.map(proxy => (async () => {
     try {
       const res = await fetchWithTimeout(proxy + encodeURIComponent(urlPath), PROXY_TIMEOUT);
-      // try parse as json, if fails grab text
       let j;
       try { j = await res.json(); } catch { 
         const t = await res.text(); 
         j = typeof t === "string" && t.trim().startsWith("{") ? safeParseJSON(t) : { token: t };
       }
       const token = j && (j.token || j.jwt || j.access_token);
-      // validate token string looks like JWT
       if (token && typeof token === "string" && token.startsWith("eyJ")) return token;
       return null;
-    } catch (e) {
-      return null;
-    }
+    } catch { return null; }
   })());
-
-  // run all proxies in parallel but don't fail on single errors
   const settled = await Promise.allSettled(promises);
   for (const s of settled) {
     if (s.status === "fulfilled" && s.value) return s.value;
@@ -203,100 +191,94 @@ async function tryProxiesForUidOnce(uid, password) {
   return null;
 }
 
-/* Try proxies attempts times (each attempt will run parallel proxies) */
 async function resolveTokenWithRetries(uid, password, attempts = UID_ATTEMPTS) {
   for (let i = 0; i < attempts; i++) {
     const token = await tryProxiesForUidOnce(uid, password);
     if (token) return token;
-    // short backoff between attempts
     await timeout(150 * (i+1));
   }
   return null;
 }
 
-/* ---------- Concurrency worker pool ---------- */
 async function processAll(data) {
-  const queue = data.slice(); // shallow copy
+  const queue = data.slice();
   const workers = Array.from({length: CONCURRENCY}, async () => {
     while (true) {
       const item = queue.shift();
       if (!item) break;
       const uid = item.uid?.toString().trim();
       const password = item.password || "";
-
-      // skip invalid
       if (!uid) continue;
-
-      // if already live, skip
       if (liveRows.some(r => r.uid === uid)) continue;
-
-      // attempt to resolve token
       const token = await resolveTokenWithRetries(uid, password, UID_ATTEMPTS);
-
       if (token) {
-        // avoid duplicates
         if (!liveRows.some(r => r.uid === uid)) {
           liveRows.push({ uid, token });
-          // remove from deadRows if present
           deadRows = deadRows.filter(d => d.uid !== uid);
         }
       } else {
-        // add to dead if not already present
         if (!deadRows.some(d => d.uid === uid) && !liveRows.some(r => r.uid === uid)) {
           deadRows.push({ uid, error: "No token / proxy failed" });
         }
       }
-
       updateCounters();
       renderTables();
-
-      // small jitter to avoid bursts
       await timeout(20);
     }
   });
-
   await Promise.all(workers);
 }
 
-/* ---------- Start button handler ---------- */
-document.getElementById("startBtn").addEventListener("click", async () => {
+async function startProcessing() {
+  const startBtn = document.getElementById("startBtn");
+  startBtn.disabled = true;
+  startBtn.textContent = "Generating...";
   const data = await parseInput();
-  if (!data.length) return alert("No input data");
-
-  // initialize
+  if (!data.length) {
+    alert("No input data");
+    startBtn.disabled = false;
+    startBtn.textContent = "Generate";
+    return;
+  }
   liveRows = [];
   deadRows = [];
   document.getElementById("total").textContent = data.length;
   updateCounters();
   renderTables();
-
-  // process
   await processAll(data);
-
-  // prepare download buttons
-  const btnCSV = document.getElementById("downloadLiveCSV");
-  btnCSV.onclick = () => {
-    const csv = ["UID,Token"].concat(liveRows.map(r => `${r.uid},"${r.token.replace(/"/g,'""')}"`)).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "live_tokens.csv";
-    a.click();
-  };
-
-  const btnJSON = document.getElementById("downloadLiveJSON");
-  btnJSON.onclick = () => {
-    const blob = new Blob([JSON.stringify(liveRows, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "live_tokens.json";
-    a.click();
-  };
-
+  startBtn.disabled = false;
+  startBtn.textContent = "Generate";
   alert("Processing finished — Live: " + liveRows.length + "  Dead: " + deadRows.length);
-});
+}
 
-/* initial render */
+async function retryDead() {
+  if (!deadRows.length) return;
+  const retryData = deadRows.map(d => ({uid:d.uid, password:""}));
+  deadRows = [];
+  updateCounters();
+  renderTables();
+  await processAll(retryData);
+}
+
+document.getElementById("startBtn").addEventListener("click", startProcessing);
+document.getElementById("retryBtn").addEventListener("click", retryDead);
+
+document.getElementById("downloadLiveCSV").onclick = () => {
+  const csv = ["UID,Token"].concat(liveRows.map(r => `${r.uid},"${r.token.replace(/"/g,'""')}"`)).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "live_tokens.csv";
+  a.click();
+};
+document.getElementById("downloadLiveJSON").onclick = () => {
+  const blob = new Blob([JSON.stringify(liveRows, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "live_tokens.json";
+  a.click();
+};
+
 renderTables();
 updateCounters();
 </script>
