@@ -5,154 +5,200 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>UID Token Checker</title>
 <style>
-  body { font-family: Arial, sans-serif; padding: 20px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-  th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-  th { background-color: #f2f2f2; }
-  button { margin: 5px; padding: 8px 12px; cursor: pointer; }
+  body { font-family: Arial, sans-serif; padding: 20px; background: #0f1724; color: #e6eef8; }
+  h1 { margin-bottom: 10px; }
+  input, button { margin: 5px 0; padding: 8px; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #0b1220; color: #fff; }
+  th, td { border: 1px solid #333; padding: 6px; text-align: center; font-size: 13px; }
+  th { background: #1e293b; }
+  .btn { cursor: pointer; background: linear-gradient(90deg,#6ee7b7,#60a5fa); border: none; font-weight: bold; }
+  .btn.download { background: transparent; border: 1px solid #60a5fa; color: #6ee7b7; margin-right: 10px; }
 </style>
 </head>
 <body>
 
 <h1>UID Token Checker</h1>
 
-<input type="file" id="fileInput" accept=".csv">
-<button id="startBtn">Start Checking</button>
-<button id="downloadCSV">Download CSV</button>
-<button id="downloadJSON">Download JSON</button>
+<input type="file" id="fileInput" accept=".csv,.json">
+<button id="startBtn" class="btn">Start Checking</button>
 
-<table id="resultTable">
-  <thead>
-    <tr>
-      <th>UID</th>
-      <th>Status</th>
-      <th>Token</th>
-    </tr>
-  </thead>
+<h2>✅ Live UIDs</h2>
+<table id="liveTable">
+  <thead><tr><th>UID</th><th>Token</th></tr></thead>
   <tbody></tbody>
 </table>
+
+<h2>❌ Dead UIDs</h2>
+<table id="deadTable">
+  <thead><tr><th>UID</th><th>Error</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<!-- Download Buttons -->
+<div style="margin-top:15px;">
+  <button id="downloadCSV" class="btn download">Download CSV</button>
+  <button id="downloadJSON" class="btn download">Download JSON</button>
+</div>
 
 <script>
 let liveRows = [];
 let deadRows = [];
 
+// ✅ Extended proxy list (25+)
 const proxies = [
-"https://api.allorigins.win/raw?url=",
-"https://thingproxy.freeboard.io/fetch/",
-"https://cors-anywhere.herokuapp.com/",
-"https://yacdn.org/proxy/",
-"https://corsproxy.io/?",
-"https://allorigins.hexlet.app/raw?url=",
-"https://cors.bridged.cc/",
-"https://cors-proxy.htmldriven.com/?url=",
-"https://cors.isomorphic.site/",
-"https://cors-anywhere.netlify.app/",
-"https://corsproxy.github.io/?",
-"https://api.codetabs.com/v1/proxy?quest="
+  "https://api.allorigins.win/raw?url=",
+  "https://thingproxy.freeboard.io/fetch/",
+  "https://cors-anywhere.herokuapp.com/",
+  "https://yacdn.org/proxy/",
+  "https://corsproxy.io/?",
+  "https://allorigins.hexlet.app/raw?url=",
+  "https://cors.bridged.cc/",
+  "https://cors-proxy.htmldriven.com/?url=",
+  "https://cors.isomorphic.site/",
+  "https://cors-anywhere.netlify.app/",
+  "https://corsproxy.github.io/?",
+  "https://api.codetabs.com/v1/proxy?quest=",
+  "https://proxy.cors.sh/",
+  "https://my-cors-anywhere.herokuapp.com/",
+  "https://cors.fluxo.info/",
+  "https://cors.iamnd.eu/",
+  "https://crossorigin.zimjs.com/api?url=",
+  "https://open.cors.workers.dev/?",
+  "https://fetch.sirv.com/?url=",
+  "https://get.corsproxy.io/?",
+  "https://proxy-thing.glitch.me/?url=",
+  "https://cors-proxy-mrm.herokuapp.com/",
+  "https://service.cors.sh/",
+  "https://proxyapi.glitch.me/?url=",
+  "https://anyorigin.vercel.app/api?url=",
+  "https://justcors.com/l_request?url="
 ];
 
-function readCSV(file) {
+// ✅ File reader (CSV or JSON)
+function readFile(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = e => {
             const text = e.target.result;
-            const rows = text.split(/\r?\n/).filter(r=>r.trim()!=="");
-            resolve(rows.map(r=>({uid:r.trim()})));
+            try {
+                if (file.name.endsWith(".json")) {
+                    const arr = JSON.parse(text);
+                    resolve(arr.map(x => ({ uid: x.uid || x })));
+                } else {
+                    const rows = text.split(/\r?\n/).filter(r=>r.trim()!=="");
+                    resolve(rows.map(r=>({ uid: r.trim() })));
+                }
+            } catch (err) { reject("Invalid file format"); }
         };
         reader.onerror = reject;
         reader.readAsText(file);
     });
 }
 
-async function fetchWithRetry(url, retries=3) {
-    for(let i=0;i<retries;i++){
-        try{
-            const res = await fetch(url);
-            if(!res.ok) throw new Error("HTTP error "+res.status);
-            const data = await res.json();
-            return data;
-        } catch(e){
-            if(i === retries-1) throw e;
-        }
-    }
-}
+function updateTables() {
+    const liveBody = document.querySelector("#liveTable tbody");
+    const deadBody = document.querySelector("#deadTable tbody");
+    liveBody.innerHTML = "";
+    deadBody.innerHTML = "";
 
-function updateTable() {
-    const tbody = document.querySelector("#resultTable tbody");
-    tbody.innerHTML = "";
-    liveRows.forEach(r => {
+    liveRows.forEach(r=>{
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${r.uid}</td><td>${r.status}</td><td>${r.token}</td>`;
-        tbody.appendChild(tr);
+        tr.innerHTML = `<td>${r.uid}</td><td>${r.token}</td>`;
+        liveBody.appendChild(tr);
     });
-    deadRows.forEach(r => {
+
+    deadRows.forEach(r=>{
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${r.uid}</td><td>${r.status}</td><td>${r.error||""}</td>`;
-        tbody.appendChild(tr);
+        tr.innerHTML = `<td>${r.uid}</td><td>${r.error||""}</td>`;
+        deadBody.appendChild(tr);
     });
 }
 
-async function processUIDs(uids) {
-    for(const it of uids){
-        let success = false;
-        for(const proxy of proxies){
-            try{
-                const url = proxy + encodeURIComponent(`https://example.com/api/token/${it.uid}`);
-                const json = await fetchWithRetry(url, 3);
-                let token = json.token || json.jwt || json.access_token;
+// ✅ Parallel proxy fetch
+async function tryProxies(uid) {
+    const urlPath = `https://jnl-gen-jwt.vercel.app/token?uid=${uid}`;
 
-                if(token && typeof token==="string" && token.startsWith("eyJ")){
-                    if(!liveRows.some(l=>l.uid===it.uid)){
-                        liveRows.push({uid:it.uid, status:"Live", token});
-                        deadRows = deadRows.filter(d=>d.uid!==it.uid);
-                        updateTable();
-                    }
-                    success = true;
-                    break;
-                }
-            } catch(e){
-                // skip to next proxy
+    const tasks = proxies.map(proxy => 
+        fetch(proxy + encodeURIComponent(urlPath))
+            .then(res => res.json())
+            .catch(() => null)
+    );
+
+    const results = await Promise.allSettled(tasks);
+
+    for (const r of results) {
+        if (r.status === "fulfilled" && r.value) {
+            const token = r.value.token || r.value.jwt || r.value.access_token;
+            if(token && token.startsWith("eyJ")){
+                return token;
             }
         }
-        if(!success && !deadRows.some(d=>d.uid===it.uid)){
-            deadRows.push({uid:it.uid, status:"Dead", error:"Invalid token or proxy HTML"});
-            updateTable();
+    }
+    return null;
+}
+
+// ✅ Process UIDs
+async function processUIDs(uids) {
+    for(const it of uids){
+        try {
+            const token = await tryProxies(it.uid);
+            if(token){
+                if(!liveRows.some(l=>l.uid===it.uid)){
+                    liveRows.push({uid:it.uid, token});
+                    deadRows = deadRows.filter(d=>d.uid!==it.uid);
+                }
+            } else {
+                if(!deadRows.some(d=>d.uid===it.uid)){
+                    deadRows.push({uid:it.uid, error:"Invalid token / Proxy error"});
+                }
+            }
+        } catch {
+            if(!deadRows.some(d=>d.uid===it.uid)){
+                deadRows.push({uid:it.uid, error:"Proxy failed"});
+            }
         }
+        updateTables();
     }
 }
 
 document.getElementById("startBtn").addEventListener("click", async ()=>{
     const file = document.getElementById("fileInput").files[0];
-    if(!file) return alert("Please select a CSV file");
-    const uids = await readCSV(file);
-    liveRows = [];
-    deadRows = [];
-    updateTable();
-    await processUIDs(uids);
-    alert("Processing completed!");
+    if(!file) return alert("Please select CSV or JSON file");
+    try {
+        const uids = await readFile(file);
+        liveRows = [];
+        deadRows = [];
+        updateTables();
+        await processUIDs(uids);
+        alert("Processing Completed!");
+    } catch (err) {
+        alert("File error: " + err);
+    }
 });
 
+// ✅ Download CSV
 document.getElementById("downloadCSV").addEventListener("click", ()=>{
-    const rows = [...liveRows.map(r=>[r.uid,r.status,r.token]), ...deadRows.map(r=>[r.uid,r.status,r.error||""])];
+    const rows = [
+      ["UID","Status","Token/Error"],
+      ...liveRows.map(r=>[r.uid,"Live",r.token]),
+      ...deadRows.map(r=>[r.uid,"Dead",r.error||""])
+    ];
     const csvContent = "data:text/csv;charset=utf-8," + rows.map(e=>e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "results.csv");
-    document.body.appendChild(link);
+    link.href = encodeURI(csvContent);
+    link.download = "results.csv";
     link.click();
-    document.body.removeChild(link);
 });
 
+// ✅ Download JSON
 document.getElementById("downloadJSON").addEventListener("click", ()=>{
-    const allData = [...liveRows,...deadRows];
+    const allData = [...liveRows.map(r=>({uid:r.uid,status:"Live",token:r.token})),
+                     ...deadRows.map(r=>({uid:r.uid,status:"Dead",error:r.error}))];
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allData,null,2));
     const link = document.createElement("a");
-    link.setAttribute("href", dataStr);
-    link.setAttribute("download", "results.json");
-    document.body.appendChild(link);
+    link.href = dataStr;
+    link.download = "results.json";
     link.click();
-    document.body.removeChild(link);
 });
 </script>
 
