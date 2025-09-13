@@ -88,7 +88,7 @@ document.getElementById("pasteArea").value=text;
 });
 
 async function fetchWithRetry(url, attempts=5){
-let delay=300;
+let delay=200;
 for(let i=0;i<attempts;i++){
 try{
 const res = await fetch(url);
@@ -98,7 +98,7 @@ try{return JSON.parse(text);} catch{return {token:text};}
 }catch(e){
 if(i===attempts-1) throw e;
 await new Promise(r=>setTimeout(r,delay));
-delay*=2;
+delay*=1.5;
 }
 }
 }
@@ -122,14 +122,17 @@ let deadRows=[];
 const base="https://jnl-gen-jwt.vercel.app/token";
 const proxies=[
 "https://api.allorigins.win/raw?url=",
+"https://thingproxy.freeboard.io/fetch/",
 "https://cors-anywhere.herokuapp.com/",
-"https://thingproxy.freeboard.io/fetch/"
+"https://yacdn.org/proxy/",
+"https://corsproxy.io/?",
+"https://allorigins.hexlet.app/raw?url/"
 ];
 
-// Default values (manual input removed)
-const parallelLimit=3;
-const minDelay=300;
-const maxDelay=700;
+// Default faster processing values
+const parallelLimit=12;
+const minDelay=100;
+const maxDelay=300;
 
 async function processUIDs(data){
 await asyncPool(parallelLimit,data,async(it)=>{
