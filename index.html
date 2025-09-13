@@ -77,6 +77,9 @@ function fetchWithTimeout(input, ms = 6000) {
   return fetch(input, { signal: controller.signal })
     .finally(() => clearTimeout(id));
 }
+function shuffle(arr) {
+  return arr.map(v => [Math.random(), v]).sort((a,b)=>a[0]-b[0]).map(v=>v[1]);
+}
 
 async function parseInput() {
   const txt = document.getElementById("pasteArea").value.trim();
@@ -107,18 +110,14 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
 const PROXIES = [
   "https://api.allorigins.win/raw?url=",
   "https://thingproxy.freeboard.io/fetch/",
-  "https://cors-anywhere.herokuapp.com/",
-  "https://yacdn.org/proxy/",
   "https://corsproxy.io/?",
   "https://allorigins.hexlet.app/raw?url=",
   "https://cors.bridged.cc/",
-  "https://cors-proxy.htmldriven.com/?url=",
+  "https://yacdn.org/proxy/",
   "https://cors.isomorphic.site/",
-  "https://cors-anywhere.netlify.app/",
   "https://corsproxy.github.io/?",
   "https://api.codetabs.com/v1/proxy?quest=",
   "https://proxy.cors.sh/",
-  "https://my-cors-anywhere.herokuapp.com/",
   "https://cors.fluxo.info/",
   "https://cors.iamnd.eu/",
   "https://crossorigin.zimjs.com/api?url=",
@@ -126,7 +125,6 @@ const PROXIES = [
   "https://fetch.sirv.com/?url=",
   "https://get.corsproxy.io/?",
   "https://proxy-thing.glitch.me/?url=",
-  "https://cors-proxy-mrm.herokuapp.com/",
   "https://service.cors.sh/",
   "https://proxyapi.glitch.me/?url=",
   "https://anyorigin.vercel.app/api?url=",
@@ -135,6 +133,7 @@ const PROXIES = [
 
 const CONCURRENCY = 12;
 const UID_ATTEMPTS = 3;
+const RETRY_ATTEMPTS = 5;
 const PROXY_TIMEOUT = 5000;
 
 let liveRows = [];
@@ -169,38 +168,35 @@ function renderTables() {
   }
 }
 
-async function tryProxiesForUidOnce(uid, password) {
+async function tryProxiesForUidOnce(uid, password, useShuffle=false) {
   const urlPath = `https://jnl-gen-jwt.vercel.app/token?uid=${encodeURIComponent(uid)}&password=${encodeURIComponent(password || "")}`;
-  const promises = PROXIES.map(proxy => (async () => {
+  const proxyList = useShuffle ? shuffle(PROXIES) : PROXIES;
+
+  for (const proxy of proxyList) {
     try {
       const res = await fetchWithTimeout(proxy + encodeURIComponent(urlPath), PROXY_TIMEOUT);
-      let j;
-      try { j = await res.json(); } catch { 
-        const t = await res.text(); 
-        j = typeof t === "string" && t.trim().startsWith("{") ? safeParseJSON(t) : { token: t };
-      }
+      let text = await res.text();
+      if (!text) continue;
+      if (text.includes("What's up?") || text.toLowerCase().includes("<!doctype")) continue;
+      let j = safeParseJSON(text);
+      if (!j && text) j = { token: text };
       const token = j && (j.token || j.jwt || j.access_token);
       if (token && typeof token === "string" && token.startsWith("eyJ")) return token;
-      return null;
-    } catch { return null; }
-  })());
-  const settled = await Promise.allSettled(promises);
-  for (const s of settled) {
-    if (s.status === "fulfilled" && s.value) return s.value;
+    } catch {}
   }
   return null;
 }
 
-async function resolveTokenWithRetries(uid, password, attempts = UID_ATTEMPTS) {
+async function resolveTokenWithRetries(uid, password, attempts = UID_ATTEMPTS, shuffleProxies=false) {
   for (let i = 0; i < attempts; i++) {
-    const token = await tryProxiesForUidOnce(uid, password);
+    const token = await tryProxiesForUidOnce(uid, password, shuffleProxies);
     if (token) return token;
     await timeout(150 * (i+1));
   }
   return null;
 }
 
-async function processAll(data) {
+async function processAll(data, isRetry=false) {
   const queue = data.slice();
   const workers = Array.from({length: CONCURRENCY}, async () => {
     while (true) {
@@ -210,7 +206,7 @@ async function processAll(data) {
       const password = item.password || "";
       if (!uid) continue;
       if (liveRows.some(r => r.uid === uid)) continue;
-      const token = await resolveTokenWithRetries(uid, password, UID_ATTEMPTS);
+      const token = await resolveTokenWithRetries(uid, password, isRetry ? RETRY_ATTEMPTS : UID_ATTEMPTS, isRetry);
       if (token) {
         if (!liveRows.some(r => r.uid === uid)) {
           liveRows.push({ uid, token });
@@ -257,7 +253,7 @@ async function retryDead() {
   deadRows = [];
   updateCounters();
   renderTables();
-  await processAll(retryData);
+  await processAll(retryData, true);
 }
 
 document.getElementById("startBtn").addEventListener("click", startProcessing);
